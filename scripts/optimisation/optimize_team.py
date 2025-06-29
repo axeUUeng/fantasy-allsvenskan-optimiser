@@ -7,7 +7,7 @@ from InquirerPy import inquirer
 
 from fantasy_optimizer.api_client import fetch_bootstrap_static
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 # ----------------------------
 # Configuration

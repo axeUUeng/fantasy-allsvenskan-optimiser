@@ -5,7 +5,7 @@ from pathlib import Path
 import json
 import time
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 FIXTURE_FILE = DATA_DIR / "fixtures.parquet"
 FIXTURE_JSON = DATA_DIR / "fixtures.json"
 
