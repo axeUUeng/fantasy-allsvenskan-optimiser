@@ -11,7 +11,7 @@ from fantasy_optimizer.api_client import fetch_bootstrap_static
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 INPUT_FILE = DATA_DIR / "player_gameweek_stats.parquet"
 FIXTURES_FILE = DATA_DIR / "fixtures.parquet"
 OUTPUT_FILE = DATA_DIR / "player_forecasts.parquet"

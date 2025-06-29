@@ -7,7 +7,7 @@ import pandas as pd
 import json
 
 # Load all gameweek stats from cached files
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 HISTORY_DIR = DATA_DIR / "player_histories"
 all_stats = []
 
