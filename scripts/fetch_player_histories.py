@@ -1,9 +1,9 @@
-#sctipts/fetch_player_histories.py
-from fantasy_optimizer.api_client import fetch_bootstrap_static, fetch_player_history
-from fantasy_optimizer.models.gameweek import PlayerGameweekStat
-from pathlib import Path
+# sctipts/fetch_player_histories.py
 
 import pandas as pd
+
+from fantasy_optimizer.api_client import fetch_bootstrap_static, fetch_player_history
+from fantasy_optimizer.models.gameweek import PlayerGameweekStat
 
 data = fetch_bootstrap_static()
 player_ids = [p["id"] for p in data["elements"]]
