@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Environments
+.env
+.venv/
+venv/
+ENV/
+env/
+*.env
+fantasy/
+data/
+
+# VSCode
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS/system
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# MyPy and Pyre
+.mypy_cache/
+.pyre/
+
+# Others
+*.sqlite3
+*.db
