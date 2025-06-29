@@ -1,8 +1,10 @@
 import cvxpy as cp
 from pathlib import Path
 import pandas as pd
-import questionary
 from InquirerPy import inquirer
+import argparse
+
+import json
 
 
 from fantasy_optimizer.api_client import fetch_bootstrap_static
@@ -14,11 +16,14 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 # ----------------------------
 USE_MARKET_ACTIVITY = True
 USE_DISCIPLINE_CONSTRAINT = True
-USE_PLAYING_CHANCE_WEIGHTS = True
+USE_PLAYING_CHANCE_WEIGHTS = False
 USE_UPSIDE_SCORE = True
-USE_BAYESIAN_FORECAST = True
-TRANSFER_PENALTY_WEIGHT = 0.1
-LIMIT_TRANSFERS = True
+
+USE_BAYESIAN_FORECAST = False
+USE_SIMULATION_FORECAST = True
+assert not (USE_BAYESIAN_FORECAST and USE_SIMULATION_FORECAST), "Only one forecast method can be used at a time."
+TRANSFER_PENALTY_WEIGHT = 0.00001
+LIMIT_TRANSFERS = False
 MAX_TRANSFERS = 1  # Set to 1 for one allowed transfer
 
 # ----------------------------
@@ -40,6 +45,10 @@ def load_player_data():
 def apply_forecast(players):
     if USE_BAYESIAN_FORECAST:
         forecast_df = pd.read_parquet(DATA_DIR / "player_forecasts.parquet")
+        forecast_df = forecast_df.rename(columns={"player_id": "id"})
+        players = players.merge(forecast_df, on="id", how="inner")
+    elif USE_SIMULATION_FORECAST:
+        forecast_df = pd.read_parquet(DATA_DIR / "player_simulation_forecasts.parquet")
         forecast_df = forecast_df.rename(columns={"player_id": "id"})
         players = players.merge(forecast_df, on="id", how="inner")
     else:
@@ -79,9 +88,20 @@ def enhance_features(players):
     return players
 
 
-def select_current_team(players):
-    
+def select_current_team(players, file_path=None):
     name_to_id = dict(zip(players["full_name"], players["player_id"]))
+
+    if file_path:
+        with open(file_path, "r") as f:
+            team_data = json.load(f)
+        current_team_ids = team_data["player_ids"]
+        current_balance = float(team_data["balance"])
+        return current_team_ids, current_balance
+
+    # Fallback: interactive mode
+    from InquirerPy import inquirer
+    import questionary
+
     sorted_names = players.sort_values("second_name")["full_name"].tolist()
 
     selected_names = inquirer.fuzzy(
@@ -94,6 +114,7 @@ def select_current_team(players):
     current_team_ids = [name_to_id[name] for name in selected_names]
     current_balance = float(questionary.text("Enter your current balance:").ask())
     return current_team_ids, current_balance
+
 
 
 def build_optimizer(player_pool, current_team_ids, current_balance):
@@ -121,44 +142,66 @@ def build_optimizer(player_pool, current_team_ids, current_balance):
 
     # Transfer penalty
     change_vector = (~player_pool["player_id"].isin(current_team_ids)).astype(float).values
+    
     if LIMIT_TRANSFERS:
         constraints.append(change_vector @ x <= MAX_TRANSFERS)
 
     expected = player_pool["expected_points"].values
+    expected = expected / expected.max() 
     market = player_pool["market_score"].values
+    market = market / market.max() if market.max() > 0 else market
     upside = player_pool["upside_score"].values
+    upside = upside / upside.max() if upside.max() > 0 else upside
     discipline = player_pool["discipline_penalty"].values
+    discipline = discipline / discipline.max() if discipline.max() > 0 else discipline
 
     objective = cp.Maximize(
         expected @ x
-        + 0.008 * market @ x
-        + 0.006 * upside @ x
-        - 0.005 * discipline @ x
+        + 0.08 * market @ x
+        + 0.06 * upside @ x
+        - 0.05 * discipline @ x
         - TRANSFER_PENALTY_WEIGHT * (change_vector @ x)
     )
 
     return cp.Problem(objective, constraints), x
+
+def save_team_to_file(player_ids, balance, path="my_team.json"):
+    with open(path, "w") as f:
+        json.dump({"player_ids": player_ids, "balance": balance}, f, indent=2)
 
 
 # ----------------------------
 # Main Execution
 # ----------------------------
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--team-file", type=str, help="Path to JSON file with current team")
+    parser.add_argument("--save-team", action="store_true", help="Save the optimized team to a file")
+    args = parser.parse_args()
+
     players, team_name_to_id = load_player_data()
     players = apply_forecast(players)
     players = enhance_features(players)
-
-    # Build final player pool
-    players = players.rename(columns={"id": "player_id"})
     
-    excluded_team_ids = [team_name_to_id[name] for name in ["AIK", "Hammarby", "Malmö FF"]]
+    players = players.rename(columns={"id": "player_id"})
+    excluded_team_ids = [team_name_to_id.get(name) for name in ["AIK", "Hammarby", "Malmö FF"]]
     player_pool = players[
         (~players["team"].isin(excluded_team_ids)) & players["status"].isin(["a", "d"])
     ].copy()
 
-    current_team_ids, current_balance = select_current_team(players)
+    current_team_ids, current_balance = select_current_team(players, file_path=args.team_file)
+    if args.save_team:
+        (Path(DATA_DIR) / "curr_team").mkdir(parents=True, exist_ok=True)
+        save_team_to_file(current_team_ids, current_balance, path = DATA_DIR / 'curr_team' / 'myteam.json')
+
     problem, x = build_optimizer(player_pool, current_team_ids, current_balance)
-    problem.solve(solver=cp.ECOS_BB, verbose=False)
+    result = problem.solve(solver=cp.ECOS_BB)
+
+    if problem.status != cp.OPTIMAL:
+        print(f"⚠️ Optimization failed: {problem.status}")
+        exit(1)
+    else:
+        print(f"✅ Optimization successful! Objective value: {result:.2f}")
 
     player_pool["selected"] = x.value > 0.99
     optimal_team = player_pool[player_pool["selected"]].copy().sort_values("position")
