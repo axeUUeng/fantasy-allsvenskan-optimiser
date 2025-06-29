@@ -12,6 +12,7 @@ scripts/
 │   ├── build_forecasts.py
 │   ├── build_forecasts_batched.py
 │   └── build_player_pool.py
+│   └── build_forecasts2.py
 └── optimisation/
     ├── OLD_optimize_team.py
     ├── optimize_team.py
