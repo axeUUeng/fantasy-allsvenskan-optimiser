@@ -1,15 +1,18 @@
 # scripts/simulate_forecasts.py
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 INPUT_FILE = DATA_DIR / "player_gameweek_stats.parquet"
 OUTPUT_FILE = DATA_DIR / "player_simulation_forecasts.parquet"
 TOTAL_ROUNDS = 30  # Total number of rounds in the season
 
 
-def simulate_rest_of_season(points: np.ndarray, rounds_left: int, n_sims: int = 1000000) -> float:
+def simulate_rest_of_season(
+    points: np.ndarray, rounds_left: int, n_sims: int = 1000000
+) -> float:
     """Simulate remaining rounds using an empirical distribution."""
     if len(points) == 0 or rounds_left <= 0:
         return 0.0
@@ -25,7 +28,9 @@ def simulate_rest_of_season(points: np.ndarray, rounds_left: int, n_sims: int = 
     return totals.mean()
 
 
-def build_simulation_forecasts(df: pd.DataFrame, total_rounds: int = TOTAL_ROUNDS) -> pd.DataFrame:
+def build_simulation_forecasts(
+    df: pd.DataFrame, total_rounds: int = TOTAL_ROUNDS
+) -> pd.DataFrame:
     latest_round = df["round"].max()
     rounds_left = max(total_rounds - latest_round, 0)
 
@@ -47,4 +52,4 @@ if __name__ == "__main__":
 
     print(f"💾 Saving forecasts to {OUTPUT_FILE}")
     forecast_df.to_parquet(OUTPUT_FILE, index=False)
-    print(forecast_df.sort_values('expected_points', ascending=False).head())
+    print(forecast_df.sort_values("expected_points", ascending=False).head())
