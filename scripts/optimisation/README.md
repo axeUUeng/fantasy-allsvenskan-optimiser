@@ -27,7 +27,7 @@ Decision variable $x_i \in \{0,1\}$ indicates whether player $i$ is selected.
 If $B$ is the available budget and $\lambda$ the transfer penalty weight, the
 problem is
 
-\[
+$$
 \begin{aligned}
 \max_x\; & \sum_{i\in P} (e_i + 0.008 m_i + 0.006 u_i - 0.005 d_i) x_i \\
           &- \lambda \sum_{i\in P} ch_i x_i \\
@@ -41,5 +41,5 @@ problem is
             & \sum_{i\in P} ch_i x_i \le \text{MAX\_TRANSFERS} \;\text{(optional)}, \\
             & x_i \in \{0,1\} \quad \forall i \in P.
 \end{aligned}
-\]
+$$
 
