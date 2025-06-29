@@ -1,8 +1,9 @@
-#fantasy_optimizer/api_client.py
-import requests
-import time
+# fantasy_optimizer/api_client.py
 import json
+import time
 from pathlib import Path
+
+import requests
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -13,7 +14,7 @@ HISTORY_DIR.mkdir(exist_ok=True)
 
 def fetch_bootstrap_static(force_refresh=False):
     file_path = DATA_DIR / "bootstrap-static.json"
-    
+
     if file_path.exists() and not force_refresh:
         with open(file_path, "r") as f:
             return json.load(f)
@@ -27,6 +28,7 @@ def fetch_bootstrap_static(force_refresh=False):
         json.dump(data, f, indent=2)
 
     return data
+
 
 def fetch_player_history(player_id: int, force_refresh: bool = False) -> dict:
     """Fetch and cache per-player gameweek history from the API."""
