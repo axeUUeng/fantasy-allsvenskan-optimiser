@@ -1,6 +1,8 @@
-import questionary
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
+import questionary
+
 from fantasy_optimizer.api_client import fetch_bootstrap_static
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -9,7 +11,7 @@ DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 bootstrap = fetch_bootstrap_static()
 players = pd.DataFrame(bootstrap["elements"])
 print(players.columns)
-sorted_players = players.sort_values('second_name')
+sorted_players = players.sort_values("second_name")
 
 # Concatenate 'first_name' and 'web_name' into a list
 player_names = [
@@ -17,8 +19,7 @@ player_names = [
 ]
 
 selected_names = questionary.checkbox(
-    "Select your current team (15 players):",
-    choices=player_names
+    "Select your current team (15 players):", choices=player_names
 ).ask()
 
 print("You selected:", selected_names)

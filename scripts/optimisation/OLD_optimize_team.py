@@ -1,5 +1,6 @@
-import cvxpy as cp
 from pathlib import Path
+
+import cvxpy as cp
 import pandas as pd
 import questionary
 
@@ -20,7 +21,9 @@ excluded_team_ids = [team_name_to_id[name] for name in ["AIK", "Hammarby", "Malm
 forecast_df = pd.read_parquet(DATA_DIR / "player_forecasts.parquet")
 expected_points = forecast_df.rename(columns={"player_id": "element"})
 
-players["position"] = players["element_type"].map({1: "GK", 2: "DEF", 3: "MID", 4: "FWD"})
+players["position"] = players["element_type"].map(
+    {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
+)
 players["team_name"] = players["team"].map(team_id_to_name)
 players = players.merge(expected_points, left_on="id", right_on="element", how="inner")
 # Apply penalty to injured players
@@ -30,18 +33,28 @@ players.loc[players["status"] == "d", "expected_points"] *= penalty_factor
 
 players["cost"] = players["now_cost"] / 10
 players = players.rename(columns={"id": "player_id", "web_name": "name"})
-player_pool = players[[
-    "player_id", "name", "team", "team_name", "position", "cost", "total_points", "status"
-]].rename(columns={
-    "total_points": "expected_points"
-})
+player_pool = players[
+    [
+        "player_id",
+        "name",
+        "team",
+        "team_name",
+        "position",
+        "cost",
+        "total_points",
+        "status",
+    ]
+].rename(columns={"total_points": "expected_points"})
 
 # Filter out excluded teams
-player_pool = player_pool[~player_pool["team"].isin(excluded_team_ids)].reset_index(drop=True)
-player_pool = player_pool[player_pool["player_id"].isin(
-    players[players["status"].isin(["a", "d"])]["player_id"]
-)]
-
+player_pool = player_pool[~player_pool["team"].isin(excluded_team_ids)].reset_index(
+    drop=True
+)
+player_pool = player_pool[
+    player_pool["player_id"].isin(
+        players[players["status"].isin(["a", "d"])]["player_id"]
+    )
+]
 
 
 # Decision variable: binary for each player
@@ -50,19 +63,22 @@ x = cp.Variable(n, boolean=True)
 
 # Constraints
 constraints = []
-sorted_players = players.sort_values('second_name')
+sorted_players = players.sort_values("second_name")
 
 # Create mapping from full name to player_id
-players["full_name"] = players["first_name"].str.strip() + " " + players["second_name"].str.strip()
+players["full_name"] = (
+    players["first_name"].str.strip() + " " + players["second_name"].str.strip()
+)
 name_to_id = dict(zip(players["full_name"], players["player_id"]))
 
 # Create display list
-player_names = sorted(players["full_name"].tolist())  # alphabetically sorted for easier browsing
+player_names = sorted(
+    players["full_name"].tolist()
+)  # alphabetically sorted for easier browsing
 
 # Prompt user to select players
 selected_names = questionary.checkbox(
-    "Select your current team (15 players):",
-    choices=player_names
+    "Select your current team (15 players):", choices=player_names
 ).ask()
 
 # Error handling
@@ -96,10 +112,12 @@ for team_id in player_pool["team"].unique():
     constraints.append(mask @ x <= 3)
 
 
-# Soft constraint: minimize number of changes 
+# Soft constraint: minimize number of changes
 transfer_penalty = 0.5  # weight of penalty per transfer
 change_vector = (~player_pool["player_id"].isin(current_team_ids)).astype(float).values
-objective = cp.Maximize(player_pool["expected_points"].values @ x - transfer_penalty * (change_vector @ x))
+objective = cp.Maximize(
+    player_pool["expected_points"].values @ x - transfer_penalty * (change_vector @ x)
+)
 # # Objective: maximize expected points
 # objective = cp.Maximize(player_pool["expected_points"].values @ x)
 

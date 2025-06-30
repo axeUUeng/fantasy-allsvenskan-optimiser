@@ -1,10 +1,11 @@
-#scripts/build_player_pool.py
+# scripts/build_player_pool.py
+import json
+from pathlib import Path
+
+import pandas as pd
+
 from fantasy_optimizer.api_client import fetch_bootstrap_static
 from fantasy_optimizer.models.player import Player
-from fantasy_optimizer.models.team import Team
-from pathlib import Path
-import pandas as pd
-import json
 
 # Load all gameweek stats from cached files
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -30,9 +31,7 @@ window = 3
 df_recent = df[df["round"] > latest_round - window]
 
 avg_points = (
-    df_recent.groupby("element")["total_points"]
-    .mean()
-    .rename("expected_points")
+    df_recent.groupby("element")["total_points"].mean().rename("expected_points")
 )
 
 # Merge with player metadata
@@ -51,8 +50,10 @@ player_pool["position"] = player_pool["element_type"].map(position_map)
 player_pool["price"] = player_pool["now_cost"] / 10
 
 # Keep only useful columns
-player_pool = player_pool[
-    ["id", "web_name", "team_name", "position", "price", "expected_points"]
-].sort_values("expected_points", ascending=False).reset_index(drop=True)
+player_pool = (
+    player_pool[["id", "web_name", "team_name", "position", "price", "expected_points"]]
+    .sort_values("expected_points", ascending=False)
+    .reset_index(drop=True)
+)
 print(player_pool.head(10))
 print(f"\n✅ Created player pool with {len(player_pool)} players.")

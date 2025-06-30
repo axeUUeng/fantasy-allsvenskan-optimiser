@@ -1,6 +1,8 @@
-#fantasy_optimizer/models/player.py
-from pydantic import BaseModel
+# fantasy_optimizer/models/player.py
 from typing import Optional
+
+from pydantic import BaseModel
+
 
 class Player(BaseModel):
     id: int  # Unique player ID
@@ -25,10 +27,14 @@ class Player(BaseModel):
     red_cards: int  # Red cards received
     saves: int  # Saves made (GK only)
 
-    bonus: Optional[int] = 0  # Bonus points awarded by the BPS system (may be missing for new players)
+    bonus: Optional[int] = (
+        0  # Bonus points awarded by the BPS system (may be missing for new players)
+    )
 
     form: Optional[str]  # Short-term form (last few games), string like "1.1"
-    selected_by_percent: Optional[str]  # Percentage of managers owning the player, as string like "7.8"
+    selected_by_percent: Optional[
+        str
+    ]  # Percentage of managers owning the player, as string like "7.8"
     points_per_game: Optional[str]  # Avg. points per game, string like "4.6"
     ep_next: Optional[str]  # Expected points next GW (if available)
     ep_this: Optional[str]  # Expected points this GW (if available)

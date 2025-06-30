@@ -23,4 +23,6 @@ id_to_team = {team.id: team for team in teams}
 # 4. Show a few players with team names
 for player in players[:5]:
     team_name = id_to_team[player.team].name
-    print(f"{player.web_name} ({team_name}): {player.total_points} pts. Status: {player.status}")
+    print(
+        f"{player.web_name} ({team_name}): {player.total_points} pts. Status: {player.status}"
+    )

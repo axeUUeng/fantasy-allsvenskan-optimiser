@@ -1,9 +1,10 @@
 # scripts/fetch_fixtures.py
-import requests
-import pandas as pd
-from pathlib import Path
 import json
 import time
+from pathlib import Path
+
+import pandas as pd
+import requests
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 FIXTURE_FILE = DATA_DIR / "fixtures.parquet"
@@ -35,24 +36,28 @@ def build_fixture_frame(data):
         team_a = fixture["team_a"]
 
         # Home team rows
-        rows.append({
-            "round": event,
-            "team": team_h,
-            "opponent_team": team_a,
-            "was_home": True,
-            "team_score": fixture["team_h_score"],
-            "opponent_score": fixture["team_a_score"]
-        })
+        rows.append(
+            {
+                "round": event,
+                "team": team_h,
+                "opponent_team": team_a,
+                "was_home": True,
+                "team_score": fixture["team_h_score"],
+                "opponent_score": fixture["team_a_score"],
+            }
+        )
 
         # Away team rows
-        rows.append({
-            "round": event,
-            "team": team_a,
-            "opponent_team": team_h,
-            "was_home": False,
-            "team_score": fixture["team_a_score"],
-            "opponent_score": fixture["team_h_score"]
-        })
+        rows.append(
+            {
+                "round": event,
+                "team": team_a,
+                "opponent_team": team_h,
+                "was_home": False,
+                "team_score": fixture["team_a_score"],
+                "opponent_score": fixture["team_h_score"],
+            }
+        )
 
     return pd.DataFrame(rows)
 
