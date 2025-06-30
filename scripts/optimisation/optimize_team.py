@@ -22,8 +22,8 @@ USE_SIMULATION_FORECAST = True
 assert not (
     USE_BAYESIAN_FORECAST and USE_SIMULATION_FORECAST
 ), "Only one forecast method can be used at a time."
-TRANSFER_PENALTY_WEIGHT = 0.00001
-LIMIT_TRANSFERS = False
+TRANSFER_PENALTY_WEIGHT = 0
+LIMIT_TRANSFERS = True
 MAX_TRANSFERS = 1  # Set to 1 for one allowed transfer
 
 
@@ -226,7 +226,11 @@ if __name__ == "__main__":
         print(f"✅ Optimization successful! Objective value: {result:.2f}")
 
     player_pool["selected"] = x.value > 0.99
-    optimal_team = player_pool[player_pool["selected"]].copy().sort_values("position")
+    optimal_team = (
+        player_pool[player_pool["selected"]]
+        .copy()
+        .sort_values(["position", "expected_points"], ascending=[True, False])
+    )
     print("\n✅ Optimal team:")
     print(
         optimal_team[["full_name", "team_name", "position", "cost", "expected_points"]]
