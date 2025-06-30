@@ -20,9 +20,16 @@ def fetch_bootstrap_static(force_refresh=False):
             return json.load(f)
 
     url = "https://fantasy.allsvenskan.se/api/bootstrap-static/"
-    response = requests.get(url)
-    response.raise_for_status()
-    data = response.json()
+    for attempt in range(3):  # Retry up to 3 times
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+            break
+        except requests.exceptions.HTTPError as e:
+            if attempt == 2:  # On the last attempt, re-raise the exception
+                raise e
+            time.sleep(2)  # Wait before retrying
 
     with open(file_path, "w") as f:
         json.dump(data, f, indent=2)
