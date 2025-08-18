@@ -88,8 +88,15 @@ def enhance_features(players):
         players["expected_points"] *= playing_chance
 
     # Injury penalty
-    injured = players["status"] == "d"
-    players.loc[injured, "expected_points"] *= 0.5
+    status_multipliers = {
+        "a": 1.0,  # available
+        "d": 0.5,  # doubtful
+        "i": 0.6,  # injured
+        "u": 0.6,  # unfit
+        "n": 0.5,  # not in squad
+        "s": 0.6,  # suspended
+    }
+    players["expected_points"] *= players["status"].map(status_multipliers).fillna(0.6)
     return players
 
 
@@ -194,6 +201,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     players, team_name_to_id = load_player_data()
+
     players = apply_forecast(players)
     players = enhance_features(players)
 
@@ -202,11 +210,11 @@ if __name__ == "__main__":
         team_name_to_id.get(name) for name in ["AIK", "Hammarby", "Malmö FF"]
     ]
     player_pool = players[
-        (~players["team"].isin(excluded_team_ids)) & players["status"].isin(["a", "d"])
+        (~players["team"].isin(excluded_team_ids)) & (players["can_select"])
     ].copy()
 
     current_team_ids, current_balance = select_current_team(
-        players, file_path=args.team_file
+        player_pool, file_path=args.team_file
     )
     if args.save_team:
         (Path(DATA_DIR) / "curr_team").mkdir(parents=True, exist_ok=True)
@@ -233,5 +241,14 @@ if __name__ == "__main__":
     )
     print("\n✅ Optimal team:")
     print(
-        optimal_team[["full_name", "team_name", "position", "cost", "expected_points"]]
+        optimal_team[
+            [
+                "web_name",
+                "full_name",
+                "team_name",
+                "position",
+                "cost",
+                "expected_points",
+            ]
+        ]
     )
