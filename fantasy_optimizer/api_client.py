@@ -53,5 +53,5 @@ def fetch_player_history(player_id: int, force_refresh: bool = False) -> dict:
     with open(file_path, "w") as f:
         json.dump(data, f, indent=2)
 
-    time.sleep(0.5)  # Be polite to the server
+    time.sleep(0.05)  # Be polite to the server
     return data
