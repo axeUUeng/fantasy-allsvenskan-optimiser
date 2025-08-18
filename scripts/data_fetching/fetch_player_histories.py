@@ -7,13 +7,16 @@ import pandas as pd
 from fantasy_optimizer.api_client import fetch_bootstrap_static, fetch_player_history
 from fantasy_optimizer.models.gameweek import PlayerGameweekStat
 
-data = fetch_bootstrap_static()
+FORCE_REFRESH = True
+print(f"🔄 Fetching player gameweek histories (force refresh: {FORCE_REFRESH})")
+
+data = fetch_bootstrap_static(force_refresh=FORCE_REFRESH)
 player_ids = [p["id"] for p in data["elements"]]
 
 all_stats = []
 
 for pid in player_ids:
-    history_json = fetch_player_history(pid)
+    history_json = fetch_player_history(pid, force_refresh=FORCE_REFRESH)
     for raw_gw in history_json["history"]:
         try:
             stat = PlayerGameweekStat(**raw_gw)
@@ -25,5 +28,5 @@ for pid in player_ids:
 df = pd.DataFrame(all_stats)
 df.to_parquet("data/player_gameweek_stats.parquet")
 df.sort_values("kickoff_time", ascending=True, inplace=True)
-print(df.head())
+print(df.tail())
 print(f"\n✅ Loaded {len(df)} player gameweek stats into DataFrame")
