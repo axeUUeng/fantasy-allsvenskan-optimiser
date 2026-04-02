@@ -27,9 +27,15 @@ class Player(BaseModel):
     red_cards: int  # Red cards received
     saves: int  # Saves made (GK only)
 
-    bonus: Optional[int] = (
-        0  # Bonus points awarded by the BPS system (may be missing for new players)
+    bonus: Optional[int] = 0  # Legacy unified bonus (removed from API, kept for compat)
+    attacking_bonus: Optional[int] = (
+        0  # Bonus from attacking actions (goals, assists, key passes)
     )
+    defending_bonus: Optional[int] = (
+        0  # Bonus from defensive actions (clean sheets, saves, CBI)
+    )
+    winning_goals: Optional[int] = 0  # Goals that were the deciding/winning goal
+    clearances_blocks_interceptions: Optional[int] = 0  # Defensive actions count
 
     form: Optional[str]  # Short-term form (last few games), string like "1.1"
     selected_by_percent: Optional[

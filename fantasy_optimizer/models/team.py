@@ -9,3 +9,6 @@ class Team(BaseModel):
     name: str  # Full team name (e.g., "Djurgården")
     short_name: str  # Abbreviated name (e.g., "DIF")
     strength: Optional[int] = None  # Composite strength rating (optional, 1–5 scale)
+    team_division: Optional[str] = (
+        None  # Division identifier (e.g. "allsvenskan") — populated once season starts
+    )

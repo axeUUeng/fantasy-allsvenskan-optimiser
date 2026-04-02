@@ -1,28 +1,32 @@
 from fantasy_optimizer.api_client import fetch_bootstrap_static
+from fantasy_optimizer.db.upsert import upsert_players, upsert_teams
 from fantasy_optimizer.models.player import Player
 from fantasy_optimizer.models.team import Team
 
-# 1. Fetch raw data
-data = fetch_bootstrap_static()
 
-# 2. Parse players
-players = []
-for raw in data["elements"]:
-    try:
-        player = Player(**raw)
-        players.append(player)
-    except Exception as e:
-        print(f"Failed to parse player ID {raw.get('id')}: {e}")
+def main(force_refresh: bool = True):
+    data = fetch_bootstrap_static(force_refresh=force_refresh)
 
-print(f"Parsed {len(players)} players successfully")
+    teams = []
+    for raw in data["teams"]:
+        try:
+            teams.append(Team(**raw).model_dump())
+        except Exception as e:
+            print(f"Failed to parse team ID {raw.get('id')}: {e}")
 
-# 3. Parse teams
-teams = [Team(**team) for team in data["teams"]]
-id_to_team = {team.id: team for team in teams}
+    upsert_teams(teams)
+    print(f"Upserted {len(teams)} teams to DB")
 
-# 4. Show a few players with team names
-for player in players[:5]:
-    team_name = id_to_team[player.team].name
-    print(
-        f"{player.web_name} ({team_name}): {player.total_points} pts. Status: {player.status}"
-    )
+    players = []
+    for raw in data["elements"]:
+        try:
+            players.append(Player(**raw).model_dump())
+        except Exception as e:
+            print(f"Failed to parse player ID {raw.get('id')}: {e}")
+
+    upsert_players(players)
+    print(f"Upserted {len(players)} players to DB")
+
+
+if __name__ == "__main__":
+    main()
