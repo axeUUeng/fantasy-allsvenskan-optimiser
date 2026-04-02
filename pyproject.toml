@@ -31,6 +31,6 @@ include = ["fantasy_optimizer*"]
 
 [dependency-groups]
 dev = [
-    "pre-commit>=4",
+    "prek>=0.3.8",
     "pyright>=1.1.408",
 ]
