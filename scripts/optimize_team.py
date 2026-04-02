@@ -253,7 +253,7 @@ if __name__ == "__main__":
         )
 
     problem, x = build_optimizer(player_pool, current_team_ids, current_balance)
-    result = problem.solve(solver=cp.ECOS_BB)
+    result = problem.solve(solver=cp.HIGHS)
 
     if problem.status != cp.OPTIMAL:
         print(f"⚠️ Optimization failed: {problem.status}")
