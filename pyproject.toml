@@ -1,0 +1,36 @@
+[project]
+name = "fantasy-allsvenskan"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "cvxpy>=1.6",
+    "inquirerpy>=0.3",
+    "ipykernel>=6",
+    "ipywidgets>=8",
+    "matplotlib>=3.10",
+    "numpy>=2",
+    "pandas>=2.2",
+    "psycopg2-binary>=2.9",
+    "pydantic>=2.11",
+    "pymc>=5",
+    "questionary>=2",
+    "requests>=2.32",
+    "rich>=14",
+    "scipy>=1.15",
+    "sqlalchemy>=2",
+    "tqdm>=4",
+    "python-dotenv>=1.2.2",
+]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["fantasy_optimizer*"]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4",
+    "pyright>=1.1.408",
+]
