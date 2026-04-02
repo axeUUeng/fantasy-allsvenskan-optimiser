@@ -1,4 +1,3 @@
-# scripts/fetch_fixtures.py
 import json
 import time
 from pathlib import Path
@@ -7,66 +6,62 @@ import pandas as pd
 import requests
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-FIXTURE_FILE = DATA_DIR / "fixtures.parquet"
-FIXTURE_JSON = DATA_DIR / "fixtures.json"
-
-TEAM_MAP_FILE = DATA_DIR / "bootstrap-static.json"
 
 
-def fetch_fixtures():
-    print("📡 Fetching fixture data...")
+def fetch_fixtures() -> list[dict]:
     url = "https://fantasy.allsvenskan.se/api/fixtures/"
-    response = requests.get(url)
+    response = requests.get(url, timeout=15)
     response.raise_for_status()
     data = response.json()
 
-    with open(FIXTURE_JSON, "w") as f:
+    with open(DATA_DIR / "fixtures.json", "w") as f:
         json.dump(data, f, indent=2)
 
-    time.sleep(0.3)  # Be polite to the server
-
+    time.sleep(0.3)
     return data
 
 
-def build_fixture_frame(data):
+def build_fixture_frame(data: list[dict]) -> pd.DataFrame:
+    season = next(int(f["kickoff_time"][:4]) for f in data if f.get("kickoff_time"))
+
     rows = []
     for fixture in data:
-        event = fixture["event"]
-        team_h = fixture["team_h"]
-        team_a = fixture["team_a"]
-
-        # Home team rows
+        base = {
+            "season": season,
+            "round": fixture["event"],
+        }
         rows.append(
             {
-                "round": event,
-                "team": team_h,
-                "opponent_team": team_a,
+                **base,
+                "team": fixture["team_h"],
+                "opponent_team": fixture["team_a"],
                 "was_home": True,
                 "team_score": fixture["team_h_score"],
                 "opponent_score": fixture["team_a_score"],
             }
         )
-
-        # Away team rows
         rows.append(
             {
-                "round": event,
-                "team": team_a,
-                "opponent_team": team_h,
+                **base,
+                "team": fixture["team_a"],
+                "opponent_team": fixture["team_h"],
                 "was_home": False,
                 "team_score": fixture["team_a_score"],
                 "opponent_score": fixture["team_h_score"],
             }
         )
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    return df.drop_duplicates(subset=["season", "round", "team", "was_home"])
 
 
 def main():
-    fixtures = fetch_fixtures()
-    df = build_fixture_frame(fixtures)
-    df.to_parquet(FIXTURE_FILE, index=False)
-    print(f"✅ Saved fixture data to {FIXTURE_FILE} with {len(df)} rows")
+    from fantasy_optimizer.db.upsert import upsert_fixtures
+
+    data = fetch_fixtures()
+    df = build_fixture_frame(data)
+    upsert_fixtures(df.to_dict(orient="records"))
+    print(f"Upserted {len(df)} fixture rows to DB")
 
 
 if __name__ == "__main__":

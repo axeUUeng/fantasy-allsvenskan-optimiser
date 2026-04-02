@@ -12,7 +12,7 @@ HISTORY_DIR = DATA_DIR / "player_histories"
 HISTORY_DIR.mkdir(exist_ok=True)
 
 
-def fetch_bootstrap_static(force_refresh=False):
+def fetch_bootstrap_static(force_refresh: bool = False) -> dict:
     file_path = DATA_DIR / "bootstrap-static.json"
 
     if file_path.exists() and not force_refresh:
@@ -20,21 +20,20 @@ def fetch_bootstrap_static(force_refresh=False):
             return json.load(f)
 
     url = "https://fantasy.allsvenskan.se/api/bootstrap-static/"
-    for attempt in range(3):  # Retry up to 3 times
+    last_exc: Exception = RuntimeError("No attempts made")
+    for attempt in range(3):
         try:
             response = requests.get(url)
             response.raise_for_status()
             data = response.json()
-            break
+            with open(file_path, "w") as f:
+                json.dump(data, f, indent=2)
+            return data
         except requests.exceptions.HTTPError as e:
-            if attempt == 2:  # On the last attempt, re-raise the exception
-                raise e
-            time.sleep(2)  # Wait before retrying
-
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=2)
-
-    return data
+            last_exc = e
+            if attempt < 2:
+                time.sleep(2)
+    raise last_exc
 
 
 def fetch_player_history(player_id: int, force_refresh: bool = False) -> dict:
@@ -46,12 +45,18 @@ def fetch_player_history(player_id: int, force_refresh: bool = False) -> dict:
             return json.load(f)
 
     url = f"https://fantasy.allsvenskan.se/api/element-summary/{player_id}/"
-    response = requests.get(url)
-    response.raise_for_status()
-    data = response.json()
-
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=2)
-
-    time.sleep(0.5)  # Be polite to the server
-    return data
+    last_exc: Exception = RuntimeError("No attempts made")
+    for attempt in range(4):
+        try:
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            with open(file_path, "w") as f:
+                json.dump(data, f, indent=2)
+            time.sleep(0.05)
+            return data
+        except (requests.exceptions.HTTPError, requests.exceptions.Timeout) as e:
+            last_exc = e
+            if attempt < 3:
+                time.sleep(2**attempt)
+    raise last_exc

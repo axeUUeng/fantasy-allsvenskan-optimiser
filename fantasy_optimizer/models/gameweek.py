@@ -11,8 +11,8 @@ class PlayerGameweekStat(BaseModel):
     total_points: int
     was_home: bool
     kickoff_time: Optional[str]
-    team_h_score: int
-    team_a_score: int
+    team_h_score: Optional[int] = None
+    team_a_score: Optional[int] = None
 
     minutes: int
     goals_scored: int
