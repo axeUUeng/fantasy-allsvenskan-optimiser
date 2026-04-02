@@ -11,9 +11,6 @@ from fantasy_optimizer.db.database import engine
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
-# ----------------------------
-# Configuration
-# ----------------------------
 USE_MARKET_ACTIVITY = True
 USE_DISCIPLINE_CONSTRAINT = True
 USE_PLAYING_CHANCE_WEIGHTS = False
@@ -26,12 +23,9 @@ assert not (
 ), "Only one forecast method can be used at a time."
 TRANSFER_PENALTY_WEIGHT = 0
 LIMIT_TRANSFERS = True
-MAX_TRANSFERS = 2  # Set to 1 for one allowed transfer
+MAX_TRANSFERS = 15  # Set to 1 for one allowed transfer
 
 
-# ----------------------------
-# Helper Functions
-# ----------------------------
 def load_player_data():
     bootstrap = fetch_bootstrap_static()
     players = pd.DataFrame(bootstrap["elements"])
@@ -120,35 +114,83 @@ def enhance_features(players):
 
 
 def select_current_team(players, file_path=None):
+    import questionary
+    from InquirerPy.prompts.fuzzy import FuzzyPrompt
+
     name_to_id = dict(zip(players["full_name"], players["player_id"]))
+    id_to_name = dict(zip(players["player_id"], players["full_name"]))
+    sorted_names = players.sort_values("second_name")["full_name"].tolist()
 
     if file_path:
         with open(file_path, "r") as f:
             team_data = json.load(f)
         current_team_ids = team_data["player_ids"]
         current_balance = float(team_data["balance"])
-        return current_team_ids, current_balance
+    else:
+        current_team_ids = None
+        current_balance = None
 
-    # Fallback: interactive mode
-    import questionary
-    from InquirerPy.prompts.fuzzy import FuzzyPrompt
+    max_transfers = None
 
-    sorted_names = players.sort_values("second_name")["full_name"].tolist()
+    while True:
+        if current_team_ids is None:
+            selected_names = FuzzyPrompt(
+                message="Select your current team (15 players):",
+                choices=sorted_names,
+                multiselect=True,
+                validate=lambda result: len(result) == 15,
+                invalid_message="You must select exactly 15 players.",
+            ).execute()
+            current_team_ids = [name_to_id[name] for name in selected_names]
 
-    selected_names = FuzzyPrompt(
-        message="Select your current team (15 players):",
-        choices=sorted_names,
-        multiselect=True,
-        validate=lambda result: len(result) == 15,
-        invalid_message="You must select exactly 15 players.",
-    ).execute()
+        if current_balance is None:
+            current_balance = float(
+                questionary.text("Enter your current balance (e.g. 2.5):").ask()
+            )
 
-    current_team_ids = [name_to_id[name] for name in selected_names]
-    current_balance = float(questionary.text("Enter your current balance:").ask())
-    return current_team_ids, current_balance
+        if max_transfers is None:
+            max_transfers = int(
+                questionary.text(
+                    "How many transfers do you want to make?",
+                    validate=lambda v: (
+                        True
+                        if (v.isdigit() and int(v) >= 0)
+                        else "Enter a non-negative integer."
+                    ),
+                ).ask()
+            )
+
+        # Confirmation summary
+        print("\n--- Confirmation ---")
+        print("Current team:")
+        for pid in current_team_ids:
+            print(f"  {id_to_name.get(pid, str(pid))}")
+        print(f"Budget (bank balance): {current_balance:.1f}")
+        print(f"Transfers: {max_transfers}")
+        print("--------------------\n")
+
+        confirmed = questionary.confirm("Is this correct?").ask()
+        if confirmed:
+            break
+
+        adjust = questionary.select(
+            "What would you like to change?",
+            choices=["Team", "Balance", "Transfers"],
+        ).ask()
+
+        if adjust == "Team":
+            current_team_ids = None
+        elif adjust == "Balance":
+            current_balance = None
+        else:
+            max_transfers = None
+
+    return current_team_ids, current_balance, max_transfers
 
 
-def build_optimizer(player_pool, current_team_ids, current_balance):
+def build_optimizer(
+    player_pool, current_team_ids, current_balance, max_transfers=MAX_TRANSFERS
+):
     n = len(player_pool)
     x = cp.Variable(n, boolean=True)
     constraints = []
@@ -206,9 +248,6 @@ def save_team_to_file(player_ids, balance, path: Path | str = "my_team.json"):
         json.dump({"player_ids": player_ids, "balance": balance}, f, indent=2)
 
 
-# ----------------------------
-# Main Execution
-# ----------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -241,27 +280,33 @@ if __name__ == "__main__":
             (~players["team"].isin(excluded_team_ids)) & (players["can_select"])
         ].copy()
 
-    current_team_ids, current_balance = select_current_team(
+    current_team_ids, current_balance, max_transfers = select_current_team(
         player_pool, file_path=args.team_file
     )
-    if args.save_team:
-        (Path(DATA_DIR) / "curr_team").mkdir(parents=True, exist_ok=True)
-        save_team_to_file(
-            current_team_ids,
-            current_balance,
-            path=DATA_DIR / "curr_team" / "myteam.json",
-        )
 
-    problem, x = build_optimizer(player_pool, current_team_ids, current_balance)
+    save_path = Path(DATA_DIR) / "curr_team" / "myteam.json"
+    if args.save_team:
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        save_team_to_file(current_team_ids, current_balance, path=save_path)
+        print(f"Team saved to: {save_path}")
+
+    problem, x = build_optimizer(
+        player_pool, current_team_ids, current_balance, max_transfers
+    )
     result = problem.solve(solver=cp.HIGHS)
 
     if problem.status != cp.OPTIMAL:
-        print(f"⚠️ Optimization failed: {problem.status}")
+        print(f"Optimization failed: {problem.status}")
+        if args.save_team:
+            print(f"Input team retained at: {save_path}")
         exit(1)
     else:
-        print(f"✅ Optimization successful! Objective value: {result:.2f}")
+        print(f"Optimization successful! Objective value: {result:.2f}")
 
     assert x.value is not None
+    # x is a binary (0/1) decision variable, but solvers return floating-point values.
+    # Values should be exactly 0 or 1, but may land at e.g. 0.9999 due to numerical
+    # precision. Thresholding at 0.99 robustly converts these to True/False.
     player_pool["selected"] = x.value > 0.99
     optimal_team = (
         player_pool[player_pool["selected"]]
