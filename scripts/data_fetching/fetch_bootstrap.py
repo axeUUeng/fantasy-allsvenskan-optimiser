@@ -1,3 +1,5 @@
+from loguru import logger
+
 from fantasy_optimizer.api_client import fetch_bootstrap_static
 from fantasy_optimizer.db.upsert import upsert_players, upsert_teams
 from fantasy_optimizer.models.player import Player
@@ -12,7 +14,7 @@ def main(force_refresh: bool = True):
         try:
             teams.append(Team(**raw).model_dump())
         except Exception as e:
-            print(f"Failed to parse team ID {raw.get('id')}: {e}")
+            logger.warning("Failed to parse team ID %s: %s", raw.get("id"), e)
 
     upsert_teams(teams)
     print(f"Upserted {len(teams)} teams to DB")
@@ -22,7 +24,7 @@ def main(force_refresh: bool = True):
         try:
             players.append(Player(**raw).model_dump())
         except Exception as e:
-            print(f"Failed to parse player ID {raw.get('id')}: {e}")
+            logger.warning("Failed to parse player ID %s: %s", raw.get("id"), e)
 
     upsert_players(players)
     print(f"Upserted {len(players)} players to DB")

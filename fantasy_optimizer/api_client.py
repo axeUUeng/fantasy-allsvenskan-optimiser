@@ -3,7 +3,7 @@ import json
 import time
 from pathlib import Path
 
-import requests
+from fantasy_optimizer.http import fetch_with_retry
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -19,21 +19,10 @@ def fetch_bootstrap_static(force_refresh: bool = False) -> dict:
         with open(file_path, "r") as f:
             return json.load(f)
 
-    url = "https://fantasy.allsvenskan.se/api/bootstrap-static/"
-    last_exc: Exception = RuntimeError("No attempts made")
-    for attempt in range(3):
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            data = response.json()
-            with open(file_path, "w") as f:
-                json.dump(data, f, indent=2)
-            return data
-        except requests.exceptions.HTTPError as e:
-            last_exc = e
-            if attempt < 2:
-                time.sleep(2)
-    raise last_exc
+    data = fetch_with_retry("https://fantasy.allsvenskan.se/api/bootstrap-static/")
+    with open(file_path, "w") as f:
+        json.dump(data, f, indent=2)
+    return data
 
 
 def fetch_player_history(player_id: int, force_refresh: bool = False) -> dict:
@@ -44,19 +33,10 @@ def fetch_player_history(player_id: int, force_refresh: bool = False) -> dict:
         with open(file_path) as f:
             return json.load(f)
 
-    url = f"https://fantasy.allsvenskan.se/api/element-summary/{player_id}/"
-    last_exc: Exception = RuntimeError("No attempts made")
-    for attempt in range(4):
-        try:
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
-            data = response.json()
-            with open(file_path, "w") as f:
-                json.dump(data, f, indent=2)
-            time.sleep(0.05)
-            return data
-        except (requests.exceptions.HTTPError, requests.exceptions.Timeout) as e:
-            last_exc = e
-            if attempt < 3:
-                time.sleep(2**attempt)
-    raise last_exc
+    data = fetch_with_retry(
+        f"https://fantasy.allsvenskan.se/api/element-summary/{player_id}/"
+    )
+    with open(file_path, "w") as f:
+        json.dump(data, f, indent=2)
+    time.sleep(0.05)
+    return data

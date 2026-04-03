@@ -1,23 +1,19 @@
 import json
-import time
 from pathlib import Path
 
 import pandas as pd
-import requests
+
+from fantasy_optimizer.http import fetch_with_retry
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
 def fetch_fixtures() -> list[dict]:
-    url = "https://fantasy.allsvenskan.se/api/fixtures/"
-    response = requests.get(url, timeout=15)
-    response.raise_for_status()
-    data = response.json()
+    data = fetch_with_retry("https://fantasy.allsvenskan.se/api/fixtures/")
 
     with open(DATA_DIR / "fixtures.json", "w") as f:
         json.dump(data, f, indent=2)
 
-    time.sleep(0.3)
     return data
 
 

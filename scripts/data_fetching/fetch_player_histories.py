@@ -1,5 +1,7 @@
 from time import sleep
 
+from loguru import logger
+
 from fantasy_optimizer.api_client import fetch_bootstrap_static, fetch_player_history
 from fantasy_optimizer.db.upsert import upsert_gameweek_stats
 from fantasy_optimizer.models.gameweek import PlayerGameweekStat
@@ -24,7 +26,7 @@ def main(force_refresh: bool = False):
                 stat = PlayerGameweekStat(**raw_gw)
                 batch.append(stat.model_dump())
             except Exception as e:
-                print(f"Failed to parse GW stat for player {pid}: {e}")
+                logger.warning("Failed to parse GW stat for player %s: %s", pid, e)
         sleep(0.05)
 
         if len(batch) >= BATCH_SIZE:
