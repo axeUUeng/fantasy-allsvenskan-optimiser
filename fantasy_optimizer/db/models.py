@@ -111,3 +111,22 @@ class ForecastRow(Base):
     player_id = Column(Integer, primary_key=True)
     expected_points = Column(Float, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class EnhancedStatRow(Base):
+    __tablename__ = "enhanced_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, unique=True)
+    position = Column(String, nullable=True)
+    team = Column(String, nullable=True)
+    xFP = Column(Float, nullable=True)
+    xFP_3 = Column(Float, nullable=True)
+    xFP_5 = Column(Float, nullable=True)
+    xFP_7 = Column(Float, nullable=True)
+    pris = Column(Float, nullable=True)
+    mal = Column(Float, nullable=True)
+    assist = Column(Float, nullable=True)
+    xG = Column(Float, nullable=True)
+    xA = Column(Float, nullable=True)
+    ingested_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

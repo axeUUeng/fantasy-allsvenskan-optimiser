@@ -2,6 +2,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from fantasy_optimizer.db.database import engine
 from fantasy_optimizer.db.models import (
+    EnhancedStatRow,
     FixtureRow,
     ForecastRow,
     PlayerGameweekStatRow,
@@ -50,6 +51,17 @@ def upsert_forecasts(forecasts: list[dict]):
         stmt = stmt.on_conflict_do_update(
             index_elements=["player_id"],
             set_={"expected_points": stmt.excluded.expected_points},
+        )
+        conn.execute(stmt)
+
+
+def upsert_enhanced_stats(stats: list[dict]):
+    """Upsert on name — replaces all stats each weekly import."""
+    with engine.begin() as conn:
+        stmt = insert(EnhancedStatRow).values(stats)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["name"],
+            set_={c: stmt.excluded[c] for c in stats[0] if c != "name"},
         )
         conn.execute(stmt)
 

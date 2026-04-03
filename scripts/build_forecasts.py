@@ -157,18 +157,88 @@ def build_simulation_forecasts(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(results)
 
 
+def build_enhanced_stats_forecasts(conn) -> pd.DataFrame | None:
+    """
+    Use xFP from enhanced_stats as expected_points, joined to players table by name.
+
+    Returns a DataFrame with columns [player_id, expected_points], or None
+    if the enhanced_stats table is empty.
+    """
+    import difflib
+
+    es = pd.read_sql(
+        text('SELECT name, "xFP" FROM enhanced_stats WHERE "xFP" IS NOT NULL'),
+        conn,
+    )
+    if es.empty:
+        return None
+
+    players = pd.read_sql(
+        text("SELECT id, web_name, first_name, second_name FROM players"),
+        conn,
+    )
+    players["full_name"] = (
+        players["first_name"] + " " + players["second_name"]
+    ).str.strip()
+
+    player_names = players["full_name"].tolist()
+
+    def match_name(es_name: str) -> int | None:
+        matches = difflib.get_close_matches(es_name, player_names, n=1, cutoff=0.6)
+        if not matches:
+            # fallback: try matching against web_name
+            web_names = players["web_name"].tolist()
+            matches = difflib.get_close_matches(es_name, web_names, n=1, cutoff=0.6)
+            if not matches:
+                return None
+            idx = players[players["web_name"] == matches[0]].index[0]
+        else:
+            idx = players[players["full_name"] == matches[0]].index[0]
+        return int(players.loc[idx, "id"])
+
+    results = []
+    unmatched = []
+    for _, row in es.iterrows():
+        player_id = match_name(row["name"])
+        if player_id is None:
+            unmatched.append(row["name"])
+            continue
+        results.append({"player_id": player_id, "expected_points": float(row["xFP"])})
+
+    if unmatched:
+        print(
+            f"Could not match {len(unmatched)} enhanced_stats players to DB: {unmatched[:5]}..."
+        )
+
+    return pd.DataFrame(results) if results else None
+
+
 if __name__ == "__main__":
     from sqlalchemy import text
 
     from fantasy_optimizer.db.database import engine
     from fantasy_optimizer.db.upsert import upsert_forecasts
 
-    print("Loading player gameweek stats from DB...")
     with engine.connect() as conn:
-        df = pd.read_sql(text("SELECT * FROM player_gameweek_stats"), conn)
+        print("Checking for enhanced stats data...")
+        forecast_df = build_enhanced_stats_forecasts(conn)
 
-    print("Building forecasts...")
-    forecast_df = build_simulation_forecasts(df)
+        if forecast_df is not None:
+            print(f"Using enhanced stats xFP for {len(forecast_df)} players.")
+        else:
+            print("No enhanced stats data found — falling back to simulation forecast.")
+            print("Loading current-season gameweek stats...")
+            df = pd.read_sql(
+                text(
+                    "SELECT * FROM player_gameweek_stats"
+                    " WHERE kickoff_time::timestamp >= date_trunc('year', CURRENT_DATE)"
+                ),
+                conn,
+            )
+            if df.empty:
+                print("No current-season data found either. Run ingest.py first.")
+                raise SystemExit(1)
+            forecast_df = build_simulation_forecasts(df)
 
     upsert_forecasts(forecast_df.to_dict(orient="records"))
     print(f"Saved {len(forecast_df)} forecasts to DB")
