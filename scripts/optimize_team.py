@@ -7,23 +7,10 @@ import pandas as pd
 from sqlalchemy import text
 
 from fantasy_optimizer.api_client import fetch_bootstrap_static
+from fantasy_optimizer.config import load_config
 from fantasy_optimizer.db.database import engine
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
-
-USE_MARKET_ACTIVITY = True
-USE_DISCIPLINE_CONSTRAINT = True
-USE_PLAYING_CHANCE_WEIGHTS = False
-USE_UPSIDE_SCORE = True
-
-USE_BAYESIAN_FORECAST = False
-USE_SIMULATION_FORECAST = True
-assert not (
-    USE_BAYESIAN_FORECAST and USE_SIMULATION_FORECAST
-), "Only one forecast method can be used at a time."
-TRANSFER_PENALTY_WEIGHT = 0
-LIMIT_TRANSFERS = True
-MAX_TRANSFERS = 15  # Set to 1 for one allowed transfer
 
 
 def load_player_data():
@@ -51,34 +38,34 @@ def load_player_data():
 
 
 def apply_forecast(players):
-    if USE_SIMULATION_FORECAST or USE_BAYESIAN_FORECAST:
-        with engine.connect() as conn:
-            forecast_df = pd.read_sql(
-                text("SELECT player_id, expected_points FROM forecasts"), conn
-            )
+    with engine.connect() as conn:
+        forecast_df = pd.read_sql(
+            text("SELECT player_id, expected_points FROM forecasts"), conn
+        )
+    if forecast_df.empty:
+        players["expected_points"] = players["form"].astype(float).fillna(0.0)
+    else:
         forecast_df = forecast_df.rename(columns={"player_id": "id"})
         players = players.merge(forecast_df, on="id", how="inner")
-    else:
-        players["expected_points"] = players["form"].astype(float).fillna(0.0)
     return players
 
 
-def enhance_features(players):
-    if USE_MARKET_ACTIVITY:
+def enhance_features(players, cfg):
+    if cfg.use_market_activity:
         players["market_score"] = (
             players["transfers_in_event"] - players["transfers_out_event"]
         ) / 1000.0
     else:
         players["market_score"] = 0.0
 
-    if USE_DISCIPLINE_CONSTRAINT:
+    if cfg.use_discipline_constraint:
         players["discipline_penalty"] = (
             players["yellow_cards"] + 2 * players["red_cards"]
         ).fillna(0.0)
     else:
         players["discipline_penalty"] = 0.0
 
-    if USE_UPSIDE_SCORE:
+    if cfg.use_upside_score:
         is_def_or_gk = players["position"].isin(["GK", "DEF"])
         is_att = players["position"].isin(["MID", "FWD"])
         players["upside_score"] = (
@@ -96,7 +83,7 @@ def enhance_features(players):
     else:
         players["upside_score"] = 0.0
 
-    if USE_PLAYING_CHANCE_WEIGHTS:
+    if cfg.use_playing_chance_weights:
         playing_chance = players["chance_of_playing_next_round"].fillna(0.0) / 100.0
         players["expected_points"] *= playing_chance
 
@@ -122,8 +109,7 @@ def select_current_team(players, file_path=None):
     sorted_names = players.sort_values("second_name")["full_name"].tolist()
 
     if file_path:
-        with open(file_path, "r") as f:
-            team_data = json.load(f)
+        team_data = validate_team_file(file_path)
         current_team_ids = team_data["player_ids"]
         current_balance = float(team_data["balance"])
     else:
@@ -144,19 +130,38 @@ def select_current_team(players, file_path=None):
             current_team_ids = [name_to_id[name] for name in selected_names]
 
         if current_balance is None:
+
+            def _validate_balance(v):
+                try:
+                    val = float(v)
+                except ValueError:
+                    return "Enter a number (e.g. 2.5)."
+                if val < 0:
+                    return "Balance cannot be negative."
+                return True
+
             current_balance = float(
-                questionary.text("Enter your current balance (e.g. 2.5):").ask()
+                questionary.text(
+                    "Enter your current balance (e.g. 2.5):",
+                    validate=_validate_balance,
+                ).ask()
             )
 
         if max_transfers is None:
+
+            def _validate_transfers(v):
+                if not v.isdigit():
+                    return "Enter a non-negative integer."
+                if int(v) < 0:
+                    return "Transfers cannot be negative."
+                if int(v) > 15:
+                    return "Maximum 15 transfers allowed."
+                return True
+
             max_transfers = int(
                 questionary.text(
                     "How many transfers do you want to make?",
-                    validate=lambda v: (
-                        True
-                        if (v.isdigit() and int(v) >= 0)
-                        else "Enter a non-negative integer."
-                    ),
+                    validate=_validate_transfers,
                 ).ask()
             )
 
@@ -188,9 +193,7 @@ def select_current_team(players, file_path=None):
     return current_team_ids, current_balance, max_transfers
 
 
-def build_optimizer(
-    player_pool, current_team_ids, current_balance, max_transfers=MAX_TRANSFERS
-):
+def build_optimizer(player_pool, current_team_ids, current_balance, max_transfers, cfg):
     n = len(player_pool)
     x = cp.Variable(n, boolean=True)
     constraints = []
@@ -210,18 +213,17 @@ def build_optimizer(
         mask = (player_pool["position"] == pos).astype(float).values
         constraints.append(mask @ x == count)
 
-    # Max 3 per team
+    # Max players per team
     for team_id in player_pool["team"].unique():
         mask = (player_pool["team"] == team_id).astype(float).values
-        constraints.append(mask @ x <= 3)
+        constraints.append(mask @ x <= cfg.max_players_per_team)
 
-    # Transfer penalty
+    # Transfer limit
     change_vector = (
         (~player_pool["player_id"].isin(current_team_ids)).astype(float).values
     )
-
-    if LIMIT_TRANSFERS:
-        constraints.append(change_vector @ x <= MAX_TRANSFERS)
+    if cfg.limit_transfers:
+        constraints.append(change_vector @ x <= max_transfers)
 
     expected = player_pool["expected_points"].values
     expected = expected / expected.max()
@@ -234,13 +236,37 @@ def build_optimizer(
 
     objective = cp.Maximize(
         expected @ x
-        + 0.08 * market @ x
-        + 0.06 * upside @ x
-        - 0.05 * discipline @ x
-        - TRANSFER_PENALTY_WEIGHT * (change_vector @ x)
+        + cfg.market_weight * market @ x
+        + cfg.upside_weight * upside @ x
+        - cfg.discipline_weight * discipline @ x
+        - cfg.transfer_penalty_weight * (change_vector @ x)
     )
 
     return cp.Problem(objective, constraints), x
+
+
+def validate_team_file(path: str) -> dict:
+    """Validate --team-file exists, is valid JSON, and contains exactly 15 players."""
+    p = Path(path)
+    if not p.exists():
+        print(f"Error: team file not found: {path}")
+        raise SystemExit(1)
+    try:
+        with open(p) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Error: team file is not valid JSON: {e}")
+        raise SystemExit(1)
+    if "player_ids" not in data or "balance" not in data:
+        print("Error: team file must contain 'player_ids' and 'balance' keys.")
+        raise SystemExit(1)
+    if len(data["player_ids"]) != 15:
+        print(f"Error: team file has {len(data['player_ids'])} players, expected 15.")
+        raise SystemExit(1)
+    if not isinstance(data["balance"], (int, float)) or data["balance"] < 0:
+        print("Error: 'balance' must be a non-negative number.")
+        raise SystemExit(1)
+    return data
 
 
 def save_team_to_file(player_ids, balance, path: Path | str = "my_team.json"):
@@ -258,15 +284,14 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    cfg = load_config()
     players, team_name_to_id = load_player_data()
 
     players = apply_forecast(players)
-    players = enhance_features(players)
+    players = enhance_features(players, cfg)
 
     players = players.rename(columns={"id": "player_id"})
-    excluded_team_ids = [
-        team_name_to_id.get(name) for name in ["AIK", "Hammarby", "Malmö FF"]
-    ]
+    excluded_team_ids = [team_name_to_id.get(name) for name in cfg.excluded_teams]
     division_known = bool(players["team_division"].notna().any())
     if division_known:
         # Filter to Allsvenskan only once team_division is populated by the API
@@ -291,7 +316,7 @@ if __name__ == "__main__":
         print(f"Team saved to: {save_path}")
 
     problem, x = build_optimizer(
-        player_pool, current_team_ids, current_balance, max_transfers
+        player_pool, current_team_ids, current_balance, max_transfers, cfg
     )
     result = problem.solve(solver=cp.HIGHS)
 

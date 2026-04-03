@@ -1,0 +1,23 @@
+[optimization]
+
+# Teams to exclude from selection
+excluded_teams = ["AIK", "Hammarby", "Malmö FF"]
+
+# Objective weights (relative influence on the solver)
+market_weight = 0.08      # transfer activity signal
+upside_weight = 0.06      # goals/assists/bonus upside
+discipline_weight = 0.05  # yellow/red card penalty
+
+# Transfer settings
+limit_transfers = true
+max_transfers = 15
+transfer_penalty_weight = 0.0
+
+# Feature toggles
+use_market_activity = true
+use_discipline_constraint = true
+use_playing_chance_weights = false
+use_upside_score = true
+
+# Team constraints
+max_players_per_team = 3
