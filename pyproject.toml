@@ -20,6 +20,8 @@ dependencies = [
     "sqlalchemy>=2",
     "tqdm>=4",
     "python-dotenv>=1.2.2",
+    "alembic>=1.18.4",
+    "loguru>=0.7.3",
 ]
 
 [build-system]
@@ -36,4 +38,6 @@ exclude-newer = "7 days"
 dev = [
     "prek>=0.3.8",
     "pyright>=1.1.408",
+    "pytest>=8",
+    "pytest-cov>=6",
 ]
